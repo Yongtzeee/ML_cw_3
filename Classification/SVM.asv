@@ -14,13 +14,12 @@ labels = data(:, size(data, 2));
 
 % %% (a) Preliminary training to get it working
 % % train the SVM
-% modelClassification = fitcsvm(features, labels, 'KernelFunction','linear', 'BoxConstraint',1);
-% [~, ~, acc] = evaluateSVM(modelClassification, features, labels);
-% numSuppVec = size(modelClassification.SupportVectors, 1);
-% disp("Result from Preliminary training:")
-% disp("  Accuracy: " + acc * 100)
-% disp("  Number of Support Vectors: " + numSuppVec)
-% disp("  Support Vector Ratio: " + numSuppVec / height(features) * 100)
+modelClassification = fitcsvm(features, labels, 'KernelFunction','linear', 'BoxConstraint',1);
+[~, ~, acc] = evaluateSVM(modelClassification, features, labels);
+disp("Accuracy: " + acc * 100)
+numSuppVec = size(modelClassification.SupportVectors, 1);
+disp("Number of Support Vectors: " + numSuppVec)
+disp("Support Vector Ratio: " + numSuppVec / height(features) * 100)
 
 
 %% (b) Performing inner cross-validation
@@ -165,8 +164,6 @@ points = accuracies + ratioInv;
 bestAccuracy = accuracies(idx);
 bestSVRatio = ratio(idx);
 
-% get statistics of best performing SVM model from the nested
-% cross-validation
 switch(idx)
     case 1
         bestKernelFunction = "rbf";
@@ -195,9 +192,8 @@ switch(idx)
         bestNumSV = -1;
 end
 
-% display the results from the nested cross-validation
 disp("________________________________________")
-disp("Result from Inner Cross-Validation:")
+disp("Result:")
 disp("  Best Accuracy: " + bestAccuracy)
 disp("  Best Number of Support Vectors: " + bestNumSV)
 disp("  Best Support Vector Ratio: " + bestSVRatio)
