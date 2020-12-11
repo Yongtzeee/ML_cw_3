@@ -17,15 +17,16 @@ featuresTest = features(floor(size(features, 1)/5*4)+1:size(features, 1), :);
 labelsTrain = labels(1:floor(size(features, 1)/5*4), :);
 labelsTest = labels(floor(size(features, 1)/5*4)+1:size(labels, 1), :);
 
-% %% (a) Preliminary training to get it working
-% % train the SVM
-% modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','linear', 'BoxConstraint',1);
-% [~, ~, acc] = evaluateSVM(modelClassification, featuresTest, labelsTest);
-% numSuppVec = size(modelClassification.SupportVectors, 1);
-% disp("Result from Preliminary training:")
-% disp("  Accuracy: " + acc * 100)
-% disp("  Number of Support Vectors: " + numSuppVec)
-% disp("  Support Vector Ratio: " + numSuppVec / height(features) * 100)
+%% (a) Preliminary training to get it working
+% train the SVM
+modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','linear', 'BoxConstraint',1);
+[preds, ~, acc] = evaluateSVM(modelClassification, featuresTest, labelsTest);
+disp(size(preds))
+numSuppVec = size(modelClassification.SupportVectors, 1);
+disp("Result from Preliminary training:")
+disp("  Accuracy: " + acc * 100)
+disp("  Number of Support Vectors: " + numSuppVec)
+disp("  Support Vector Ratio: " + numSuppVec / height(features) * 100)
 
 
 %% (b) Performing inner cross-validation
@@ -183,7 +184,7 @@ for f = kernelFunctions
     
     countHyper = countHyper + 2;
     
-    disp("________________________________________")
+    disp("----------------------------------------")
     disp("Best hyperparameter combination for " + f + " kernel function:")
     disp("  Box Constraint: " + bc(idx3))
     disp("  Kernel Function argument value: " + kfval(idx2(idx3)))
@@ -197,7 +198,7 @@ end
 bestHyperparamCombi = bestHyperparamCombi';
 
 % % display the results from the nested cross-validation
-% disp("________________________________________")
+% disp("----------------------------------------")
 % disp("Result from Inner Cross-Validation:")
 % disp("  Best Accuracy: " + bestAccuracy)
 % disp("  Best Number of Support Vectors: " + bestNumSV)
@@ -248,7 +249,7 @@ for f = 1:length(kernelFunctions)
     end
     
     avgAcc = totalAcc / folds * 100;
-    disp("________________________________________")
+    disp("----------------------------------------")
     disp("Result for " + kernelFunctions(f) + " kernel function in 10-fold cross-validation:")
     disp("  Max accuracy: " + maxAcc * 100)
     disp("  Average accuracy: " + avgAcc)
@@ -268,28 +269,41 @@ elseif bestKernelFunc == "polynomial"
     modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi(f,2), 'PolynomialOrder',bestHyperparamCombi(f,1));
 end
 
+
+%% (c2) compare results between ANN, Decision Tree, and SVM
 [SVMPreds, ~, acc] = evaluateSVM(modelClassification, featuresTest, labelsTest);
 numSuppVec = size(modelClassification.SupportVectors, 1);
-disp("________________________________________")
+disp("----------------------------------------")
 disp("Result from training:")
 disp("  Accuracy: " + acc * 100)
 disp("  Number of Support Vectors: " + numSuppVec)
 disp("  Support Vector Ratio: " + numSuppVec / height(features) * 100)
 
+% get predictions for Decision Tree and ANN
+ANNPreds = [1 0 0 0 1 1 1 0 0 0 1 0 1 0 0 0 1 0 0 1 0 1 0 1 0 1 0 1 1 1 1 0 1 1 0 1 0 1 1 1 1 1 0 0 0 1 1 1 1 0 1 0 1 1 0 1 0 1 0 1 1 1 1 1 0 1 1 0 0 1 0 0 0 1 0 0 1 0 1 0 1 0 0 1 1 1 0 1 1 0 0 0 0 1 1 1 1 1 1 1 0 1 0 0 1 1 1 0 1 0 1 1 0 0 1 1 1 0 1 1 1 1 0 1 1 0 0 1 0 0 1 1 0 0 0 1 1 1 1 1 1 0 0 1 0 0 0 0 1 1 0 1 0 0 0 1 1 1 1 1 0 0 1 0 1 0 0 0 0 1 1 1 1 1 0 1 1 1 1 1 1 1 0 0 0 0 1 1 1 0 1 0 1 0 1 1 1 0 1 0 1 1 1 0 1 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 1 0 1 1 1 1 1 0 1 1 1 0 0 1 1 0 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 0 1 1 1 0 0 1 1 1 0 0 1 1 1 0 1 1 1 0 1 1 1 0 1 1 1 1 1 1 0 0 0 1 1 0 0 1 1 0 1 1 1 0 0 1 0 0 1 0 1 1 1 0 1 1 0 1 1 0 0 1 1 1 0 1 0 1 0 1 0 1 1 1 0 1 1 1 1 1 0 1 1 0 0 1 0 1 1 1 0 1 0 1 1 1 1 0 0 1 1 0 0 1 0 1 1 1 0 1 0 1 1 0 0 1 1 1 1 1 0 1 1 1 0 1 1 0 1 0 0 0 1 1 0 1 0 0 0 0 1 0 1 1 1 1 1 1 0 0 1 1 0 0 1 1 0 1 0 1 0 0 0 0 1 1 1 0 1 1 0 0 0 0 0 1 1 1 0 0 1 0 0 1 0 0 1 0 1 0 1 1 1 0 0 1 0 1 1 1 0 0 0 1 1 1 1 0 1 0 1 0 1 1 1 0 1 0 1 0 1 0 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 0 0 1 1 0 0 1 0 0 1 1 1 1 0 1 1 1 0 0 1 1 1 1 1 1 1 1 0 0 0 1 1 1 0 1 1 0 1 0 0 1 1 1 0 0 0 1 1 0 0 0 0 1 1 0 0 1 1 1 1 1 1 1 0 1 1 1 0 1 1 1 1 1 0 0 0 0 1 1 0 1 0 1 0 1 0 0 0 0 1 1 0 0 1 1 0 1 1 1 0 1 1 1 1 0 1 1 1 1 1 0 1 1 1 0 0 1 0 1 1 1 0 1 0 1 0 1 1 1 1 1 1 1 1 0 1 1 1 0 0 0 1 1 0 1 0 0 1 1 1 1 0 1 0 1 1 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 1 0 1 1 1 0 0 0 0 0 1 1 1 1 0 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 0 1 0 0 0 1 1 1 1 1 1 1 1 1 1 0 1 0 0 0 1 1 1 1 0 1 0 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 0 1 1 0 0 1 0 1 1 0 1 1 1 0 1 1 1 1 1]';
+DTPreds = [1 1 1 0 0 1 1 1 0 1 1 0 0 1 0 1 0 1 1 0 0 0 0 0 0 1 0 0 1 1 0 1 0 0 0 0 1 0 1 1 1 1 1 1 0 0 0 0 0 0 0 1 0 1 1 1 1 0 1 0 1 0 0 1 1 1 1 1 0 1 1 1 1 0 0 1 0 1 1 0 1 1 1 0 0 1 1 1 1 1 0 0 0 1 1 0 0 1 1 1 1 1 1 1 0 1 0 0 1 1 1 0 0 0 0 0 0 1 0 0 0 1 1 0 1 0 0 0 1 1 1 0 0 0 0 0 1 1 0 1 1 0 1 0 0 1 1 0 1 0 0 1 1 1 1 0 0 0 0 1 0 1 1 1 0 0 0 1 0 0 1 0 1 1 1 0 1 1 0 0 1 0 1 0 0 0 0 1 1 0 1 0 0 1 1 1 1 1 1 1 0 1 0 0 1 1 0 0 0 1 1 1 1 0 1 1 0 0 0 1 0 0 0 0 1 1 1 1 0 0 1 1 1 0 0 1 0 1 0 1 0 1 0 0 0 0 1 0 1 0 0 1 0 0 1 1 1 1 1 0 1 1 0 1 1 0 0 0 0 1 0 1 1 1 1 0 1 1 1 1 1 0 0 1 1 0 1 0 1 1 0 0 1 1 1 0 0 1 0 1 1 1 1 1 1 0 1 0 1 1 0 0 1 1 1 1 1 0 1 1 0 1 1 1 0 0 0 0 0 0 1 0 0 1 1 0 1 1 0 1 0 0 1 1 0 1 1 1 0 0 1 1 1 1 0 0 0 0 1 0 1 1 1 0 1 0 0 1 0 1 0 0 1 0 1 1 0 1 0 1 0 0 0 0 1 0 1 0 0 1 0 0 0 1 1 1 0 1 0 1 0 0 0 0 0 1 1 0 1 1 1 0 1 1 0 0 1 1 0 1 1 0 0 0 1 1 1 0 1 1 0 0 0 0 1 0 0 0 1 0 1 0 1 0 1 0 0 1 1 0 0 1 1 0 1 0 1 0 1 1 1 0 0 0 0 1 1 1 1 1 1 0 1 1 1 1 0 0 1 0 1 0 0 1 0 0 0 0 0 0 0 0 1 1 1 1 0 1 0 1 0 1 0 0 0 1 0 0 0 1 0 0 1 0 1 0 1 1 0 0 1 1 0 0 1 1 0 1 0 1 1 0 1 1 1 0 0 0 1 1 1 0 1 1 1 1 0 0 1 1 1 0 1 0 0 1 0 1 0 0 0 0 0 0 1 1 1 1 0 1 1 1 1 0 1 1 1 0 0 0 1 0 1 0 1 1 0 1 0 1 0 1 1 1 0 1 0 0 1 1 0 1 0 1 1 0 0 1 1 1 0 1 1 1 1 0 0 1 1 0 1 1 1 0 0 0 1 1 0 1 0 1 1 0 0 1 0 0 0 1 1 0 0 1 0 0 1 0 0 0 1 1 1 0 0 1 1 0 0 0 1 1 1 1 1 0 0 1 1 0 0 0 0 1 0 0 1 1 0 1 0 1 1 0 1 1 0 1 0 1 1 1 0 1 0 1 0 0 1 1 1 0 1 1 0 0 0 0 0 1 1 0 0 1 1 0 0 0 1 1 1 0 1 1 1 0 1 0 0 1 0 1 1 1 1 0 1 1 0 1 1 1 1 1 0 0 0 1 1 0 0 0 0 0 0 1 1 0 1 1 0 1 1 1]';
+SVMPreds = SVMPreds';
 
-% %% (c2) compare results between ANN, Decision Tree, and SVM
-% 
-% % load predictions for Decision Tree and ANN
-% 
-% 
-% % between ANN and Decision Tree
-% [h,p,ci,stats] = ttest2(ANNPreds, DTPreds);
-% 
-% % between ANN and SVM
-% [h,p,ci,stats] = ttest2(ANNPreds, SVMPreds);
-% 
-% % between Decision Tree and SVM
-% [h,p,ci,stats] = ttest2(DTPreds, SVMPreds);
+ttest2Results = zeros(2,3);
+
+% between ANN and Decision Tree
+[h,p,~,stats] = ttest2(ANNPreds, DTPreds);
+ttest2Results(1) = h;
+ttest2Results(2) = p;
+
+% between ANN and SVM
+[h,p,~,stats] = ttest2(ANNPreds, SVMPreds);
+ttest2Results(3) = h;
+ttest2Results(4) = p;
+
+% between Decision Tree and SVM
+[h,p,~,stats] = ttest2(DTPreds, SVMPreds);
+ttest2Results(5) = h;
+ttest2Results(6) = p;
+
+disp("----------------------------------------")
+disp("TTEST2 Results:")
+disp(ttest2Results')
 
 end
 
