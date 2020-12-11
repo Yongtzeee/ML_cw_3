@@ -1,4 +1,4 @@
-function finalResult = SVM()
+function resultNested = SVM()
 % load the dataset
 data = readtable('online_shoppers_intention_mod.csv');
 
@@ -11,11 +11,16 @@ labels = data(:, size(data, 2));
 
 [features, labels] = preProcessData(features, labels);
 
+% split dataset to train and test datasets
+featuresTrain = features(1:floor(size(features, 1)/5*4), :);
+featuresTest = features(floor(size(features, 1)/5*4)+1:size(features, 1), :);
+labelsTrain = labels(1:floor(size(features, 1)/5*4), :);
+labelsTest = labels(floor(size(features, 1)/5*4)+1:size(labels, 1), :);
 
 % %% (a) Preliminary training to get it working
 % % train the SVM
-% modelClassification = fitcsvm(features, labels, 'KernelFunction','linear', 'BoxConstraint',1);
-% [~, ~, acc] = evaluateSVM(modelClassification, features, labels);
+% modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','linear', 'BoxConstraint',1);
+% [~, ~, acc] = evaluateSVM(modelClassification, featuresTest, labelsTest);
 % numSuppVec = size(modelClassification.SupportVectors, 1);
 % disp("Result from Preliminary training:")
 % disp("  Accuracy: " + acc * 100)
@@ -26,14 +31,15 @@ labels = data(:, size(data, 2));
 %% (b) Performing inner cross-validation
 
 % hyperparameters
-boxConstraints = [0.001, 0.1, 1, 10, 100];
-kernelFunctions = ["rbf", "polynomial"];
-kernelScale = [0.001, 0.1, 1, 10, 100];
+boxConstraints = [0.1, 1, 5, 10, 20];
+kernelFunctions = ["linear", "rbf", "polynomial"];
+kernelScale = [0.1, 1, 5, 10, 20];
 polynomialOrder = 2:4;
 
 % store the results here
-results.rbf = zeros(3, length(kernelScale), length(boxConstraints));    % number of SV, ratio of SV, accuracy
-results.polynomial = zeros(3, length(polynomialOrder), length(boxConstraints));
+resultsNestedCV.linear = zeros(4, 1, length(boxConstraints));
+resultsNestedCV.rbf = zeros(4, length(kernelScale), length(boxConstraints));    % number of SV, ratio of SV, accuracy, points
+resultsNestedCV.polynomial = zeros(4, length(polynomialOrder), length(boxConstraints));
 
 % take 10% of the original data for faster CV
 featuresNestedCV = features(1:height(features)/10, :);
@@ -47,7 +53,9 @@ for f = kernelFunctions
     
     for c = boxConstraints
         
-        if f == "rbf"
+        if f == "linear"
+            funcArgVals = 1:1;
+        elseif f == "rbf"
             funcArgName = 'KernelScale';
             funcArgVals = kernelScale;
         elseif f == "polynomial"
@@ -57,8 +65,9 @@ for f = kernelFunctions
         
         for val = funcArgVals
             
-            highestOuterAcc = 0;
+            highestOuterPoint = 0;
             bestOuterModel = 0;
+            bestAcc = 0;
             
             for outerFold = 1:numFoldsNestedCV
     
@@ -72,7 +81,7 @@ for f = kernelFunctions
                 labelsFoldTrain2 = labelsNestedCV(outerFold*(floor(size(featuresNestedCV,1)/10))+1:size(labelsNestedCV,1), :);
                 labelsFoldTrainOuter = [labelsFoldTrain1; labelsFoldTrain2];
                 
-                highestInnerAcc = 0;
+                highestInnerPoint = 0;
                 bestInnerModel = 0;
 
                 for innerFold = 1:numFoldsNestedCV
@@ -87,25 +96,37 @@ for f = kernelFunctions
                     labelsFoldTrain2 = labelsFoldTrainOuter(innerFold*(floor(size(featuresFoldTrainOuter,1)/10))+1:size(labelsFoldTrainOuter,1), :);
                     labelsFoldTrainInner = [labelsFoldTrain1; labelsFoldTrain2];
                     
-                    tic
-                    modelClassification = fitcsvm(featuresFoldTrainInner, labelsFoldTrainInner, 'KernelFunction',f, 'BoxConstraint',c, funcArgName,val);
-                    toc
+                    % train SVM
+                    if f == "linear"
+                        modelClassification = fitcsvm(featuresFoldTrainInner, labelsFoldTrainInner, 'KernelFunction',f, 'BoxConstraint',c);
+                    else
+                        modelClassification = fitcsvm(featuresFoldTrainInner, labelsFoldTrainInner, 'KernelFunction',f, 'BoxConstraint',c, funcArgName,val);
+                    end
                     
-                    % evaluate
+                    % evaluate SVM
                     [~, ~, acc] = evaluateSVM(modelClassification, featuresFoldTestInner, labelsFoldTestInner);
                     
-                    if acc > highestInnerAcc
+                    % - a better SVM model is a model that uses less number of support vectors but achieves better accuracy
+
+                    % combine accuracy and SV ratio to calculate "generalization point" for each
+                    % best performing hyperparameter combination candidate
+                    point = acc * 100 + (100 - size(modelClassification.SupportVectors, 1)/height(featuresFoldTrainInner) * 100);
+                    
+                    if point > highestInnerPoint
                         bestInnerModel = modelClassification;
-                        highestInnerAcc = acc;
+                        highestInnerPoint = point;
                     end
                 end
                 
                 % evaluate best performing model
                 [~, ~, acc] = evaluateSVM(bestInnerModel, featuresFoldTestOuter, labelsFoldTestOuter);
                 
-                if acc > highestOuterAcc
-                    bestOuterModel = modelClassification;
-                    highestOuterAcc = acc;
+                point = acc * 100 + (100 - size(bestInnerModel.SupportVectors, 1)/height(featuresFoldTrainInner) * 100);
+                
+                if point > highestOuterPoint
+                    bestOuterModel = bestInnerModel;
+                    highestOuterPoint = point;
+                    bestAcc = acc * 100;
                 end
                     
             end
@@ -114,121 +135,161 @@ for f = kernelFunctions
             numSuppVec = size(bestOuterModel.SupportVectors, 1);
             suppVecRat = numSuppVec / height(featuresFoldTrainOuter) * 100; % in %
             
-            if f == "rbf"
-                results.rbf(count) = numSuppVec;
-                results.rbf(count+1) = suppVecRat;
-                results.rbf(count+2) = highestOuterAcc * 100;   % in %
+            if f == "linear"
+                resultsNestedCV.linear(count) = numSuppVec;
+                resultsNestedCV.linear(count+1) = suppVecRat;
+                resultsNestedCV.linear(count+2) = bestAcc;   % in %
+                resultsNestedCV.linear(count+3) = highestOuterPoint;
+            elseif f == "rbf"
+                resultsNestedCV.rbf(count) = numSuppVec;
+                resultsNestedCV.rbf(count+1) = suppVecRat;
+                resultsNestedCV.rbf(count+2) = bestAcc;   % in %
+                resultsNestedCV.rbf(count+3) = highestOuterPoint;
             elseif f == "polynomial"
-                results.polynomial(count) = numSuppVec;
-                results.polynomial(count+1) = suppVecRat;
-                results.polynomial(count+2) = highestOuterAcc * 100;    % in %
+                resultsNestedCV.polynomial(count) = numSuppVec;
+                resultsNestedCV.polynomial(count+1) = suppVecRat;
+                resultsNestedCV.polynomial(count+2) = bestAcc;    % in %
+                resultsNestedCV.polynomial(count+3) = highestOuterPoint;
             end
             
-            count = count + 3;
+            count = count + 4;
             
         end
     end
 end
-finalResult = results;
+resultNested = resultsNestedCV;
 
-% get best hyperparameter combination candidates
-% accuracy and SV ratio of best accuracy in RBF
-[maxAccRBF1, idxAccRBF1] = max(results.rbf(3,:,:), [], 2);
-[bestRBFAcc, idxAccRBF2] = max(maxAccRBF1, [], 3);
-bestAccSVRatRBF = results.rbf(2,idxAccRBF1(idxAccRBF2),idxAccRBF2);
-
-% accuracy and SV ratio of best SV ratio in RBF
-[minSVRatRBF1, idxRatRBF1] = min(results.rbf(2,:,:), [], 2);
-[bestRBFSVRat, idxRatRBF2] = min(minSVRatRBF1, [], 3);
-bestSVRatAccRBF = results.rbf(3,idxRatRBF1(idxRatRBF2),idxRatRBF2);
-
-% accuracy and SV ratio of best accuracy in Polynomial
-[maxAccPoly1, idxAccPoly1] = max(results.polynomial(3,:,:), [], 2);
-[bestPolyAcc, idxAccPoly2] = max(maxAccPoly1, [], 3);
-bestAccSVRatPoly = results.polynomial(2,idxAccPoly1(idxAccPoly2),idxAccPoly2);
-
-% accuracy and SV ratio of best SV ratio in Polynomial
-[minSVRatPoly1, idxRatPoly1] = min(results.polynomial(2,:,:), [], 2);
-[bestPolySVRat, idxRatPoly2] = min(minSVRatPoly1, [], 3);
-bestSVRatAccPoly = results.polynomial(3,idxRatPoly1(idxRatPoly2),idxRatPoly2);
-
-% - a better SVM model is a model that uses less number of support vectors but achieves better accuracy
-
-% combine accuracy and SV ratio to calculate "generalization point" for each
-% best performing hyperparameter combination candidate
-accuracies = [bestRBFAcc bestSVRatAccRBF bestPolyAcc bestSVRatAccPoly];
-ratio = [bestAccSVRatRBF bestRBFSVRat bestAccSVRatPoly bestPolySVRat];
-ratioInv = 100 - ratio;
-points = accuracies + ratioInv;
-[~, idx] = max(points);
-
-bestAccuracy = accuracies(idx);
-bestSVRatio = ratio(idx);
-
-% get statistics of best performing SVM model from the nested
-% cross-validation
-switch(idx)
-    case 1
-        bestKernelFunction = "rbf";
-        bestFuncArg = kernelScale(idxAccRBF1(idxAccRBF2));
-        bestBoxConstraint = boxConstraints(idxAccRBF2);
-        bestNumSV = results.rbf(1,idxAccRBF1(idxAccRBF2),idxAccRBF2);
-    case 2
-        bestKernelFunction = "rbf";
-        bestFuncArg = kernelScale(idxRatRBF1(idxRatRBF2));
-        bestBoxConstraint = boxConstraints(idxRatRBF2);
-        bestNumSV = results.rbf(1,idxRatRBF1(idxRatRBF2),idxRatRBF2);
-    case 3
-        bestKernelFunction = "polynomial";
-        bestFuncArg = polynomialOrder(idxAccPoly1(idxAccPoly2));
-        bestBoxConstraint = boxConstraints(idxAccPoly2);
-        bestNumSV = results.polynomial(1,idxAccPoly1(idxAccPoly2),idxAccPoly2);
-    case 4
-        bestKernelFunction = "polynomial";
-        bestFuncArg = polynomialOrder(idxRatPoly1(idxRatPoly2));
-        bestBoxConstraint = boxConstraints(idxRatPoly2);
-        bestNumSV = results.polynomial(1,idxRatPoly1(idxRatPoly2),idxRatPoly2);
-    otherwise
-        bestKernelFunction = "NONE";
-        bestFuncArg = -1;
-        bestBoxConstraint = -1;
-        bestNumSV = -1;
+bestHyperparamCombi = zeros(2,3);
+countHyper = 1;
+bc = boxConstraints;
+for f = kernelFunctions
+    if f == "linear"
+        resultMat = resultsNestedCV.linear;
+        kfval = nan;
+    elseif f == "rbf"
+        resultMat = resultsNestedCV.rbf;
+        kfval = kernelScale;
+    elseif f == "polynomial"
+        resultMat = resultsNestedCV.polynomial;
+        kfval = polynomialOrder;
+    end
+    
+    % get highest point for each model
+    [maxPointsDim2, idx2] = max(resultMat(4,:,:), [], 2);
+    [~, idx3] = max(maxPointsDim2, [], 3);
+    
+    bestHyperparamCombi(countHyper) = kfval(idx2(idx3));
+    bestHyperparamCombi(countHyper+1) = bc(idx3);
+    
+    countHyper = countHyper + 2;
+    
+    disp("________________________________________")
+    disp("Best hyperparameter combination for " + f + " kernel function:")
+    disp("  Box Constraint: " + bc(idx3))
+    disp("  Kernel Function argument value: " + kfval(idx2(idx3)))
+    disp("====================")
+    disp("Best results from nested cross-validation:")
+    disp("  Number of support vectors: " + resultMat(1,idx2(idx3),idx3))
+    disp("  Support vector ratio: " + resultMat(2,idx2(idx3),idx3))
+    disp("  Accuracy: " + resultMat(3,idx2(idx3),idx3))
 end
 
-% display the results from the nested cross-validation
+bestHyperparamCombi = bestHyperparamCombi';
+
+% % display the results from the nested cross-validation
+% disp("________________________________________")
+% disp("Result from Inner Cross-Validation:")
+% disp("  Best Accuracy: " + bestAccuracy)
+% disp("  Best Number of Support Vectors: " + bestNumSV)
+% disp("  Best Support Vector Ratio: " + bestSVRatio)
+% disp("Best hyperparameters:")
+% disp("  Kernel Function: " + bestKernelFunction)
+% disp("  Kernel Function Argument: " + bestFuncArg)
+% disp("  Box Constraint: " + bestBoxConstraint)
+
+
+%% (c1) Perform 10-fold cross-validation for linear, gaussian rbf, and polynomial kernels
+maxAvgAcc = 0;
+for f = 1:length(kernelFunctions)
+    
+    totalAcc = 0;
+    maxAcc = 0;
+    folds = 10;
+    for fold = 1:folds
+    
+        % split dataset into training and testing datasets in each fold
+        featuresFoldTest = features((fold-1)*(floor(size(features,1)/10))+1:fold*(floor(size(features,1)/10)), :);
+        featuresFoldTrain1 = features(1:(fold-1)*(floor(size(features,1)/10)), :);
+        featuresFoldTrain2 = features(fold*(floor(size(features,1)/10))+1:size(features,1), :);
+        featuresFoldTrain = [featuresFoldTrain1; featuresFoldTrain2];
+        labelsFoldTest = labels((fold-1)*(floor(size(features,1)/10))+1:fold*(floor(size(features,1)/10)), :);
+        labelsFoldTrain1 = labels(1:(fold-1)*(floor(size(features,1)/10)), :);
+        labelsFoldTrain2 = labels(fold*(floor(size(features,1)/10))+1:size(labels,1), :);
+        labelsFoldTrain = [labelsFoldTrain1; labelsFoldTrain2];
+
+        % train SVM
+        if kernelFunctions(f) == "linear"
+            modelClassification = fitcsvm(featuresFoldTrain, labelsFoldTrain, 'KernelFunction','linear', 'BoxConstraint',bestHyperparamCombi(f,2));
+        elseif kernelFunctions(f) == "rbf"
+            modelClassification = fitcsvm(featuresFoldTrain, labelsFoldTrain, 'KernelFunction','rbf', 'BoxConstraint',bestHyperparamCombi(f,2), 'KernelScale',bestHyperparamCombi(f,1));
+        elseif kernelFunctions(f) == "polynomial"
+            modelClassification = fitcsvm(featuresFoldTrain, labelsFoldTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi(f,2), 'PolynomialOrder',bestHyperparamCombi(f,1));
+        end
+
+        % evaluate SVM
+        [~, ~, acc] = evaluateSVM(modelClassification, featuresFoldTest, labelsFoldTest);
+
+        % average and max accuracy
+        if acc > maxAcc
+            maxAcc = acc;
+        end
+        totalAcc = totalAcc + acc;
+        
+    end
+    
+    avgAcc = totalAcc / folds * 100;
+    disp("________________________________________")
+    disp("Result for " + kernelFunctions(f) + " kernel function in 10-fold cross-validation:")
+    disp("  Max accuracy: " + maxAcc * 100)
+    disp("  Average accuracy: " + avgAcc)
+    
+    if avgAcc > maxAvgAcc
+        maxAvgAcc = avgAcc;
+        bestKernelFunc = kernelFunctions(f);
+    end
+end
+
+% train best SVM model on whole dataset and retrieve its predictions
+if bestKernelFunc == "linear"
+    modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','linear', 'BoxConstraint',bestHyperparamCombi(f,2));
+elseif bestKernelFunc == "rbf"
+    modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','rbf', 'BoxConstraint',bestHyperparamCombi(f,2), 'KernelScale',bestHyperparamCombi(f,1));
+elseif bestKernelFunc == "polynomial"
+    modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi(f,2), 'PolynomialOrder',bestHyperparamCombi(f,1));
+end
+
+[SVMPreds, ~, acc] = evaluateSVM(modelClassification, featuresTest, labelsTest);
+numSuppVec = size(modelClassification.SupportVectors, 1);
 disp("________________________________________")
-disp("Result from Inner Cross-Validation:")
-disp("  Best Accuracy: " + bestAccuracy)
-disp("  Best Number of Support Vectors: " + bestNumSV)
-disp("  Best Support Vector Ratio: " + bestSVRatio)
-disp("Best hyperparameters:")
-disp("  Kernel Function: " + bestKernelFunction)
-disp("  Kernel Function Argument: " + bestFuncArg)
-disp("  Box Constraint: " + bestBoxConstraint)
+disp("Result from training:")
+disp("  Accuracy: " + acc * 100)
+disp("  Number of Support Vectors: " + numSuppVec)
+disp("  Support Vector Ratio: " + numSuppVec / height(features) * 100)
 
 
-% %% (c1) Perform 10-fold cross-validation
-% folds = 10;
-% for fold = 1:folds
-%     
-%     % split dataset into training and testing datasets in each fold
-%     featuresFoldTest = features((fold-1)*(floor(size(features,1)/10))+1:fold*(floor(size(features,1)/10)), :);
-%     featuresFoldTrain1 = features(1:(fold-1)*(floor(size(features,1)/10)), :);
-%     featuresFoldTrain2 = features(fold*(floor(size(features,1)/10))+1:size(features,1), :);
-%     featuresFoldTrain = [featuresFoldTrain1; featuresFoldTrain2];
-%     labelsFoldTest = labels((fold-1)*(floor(size(features,1)/10))+1:fold*(floor(size(features,1)/10)), :);
-%     labelsFoldTrain1 = labels(1:(fold-1)*(floor(size(features,1)/10)), :);
-%     labelsFoldTrain2 = labels(fold*(floor(size(features,1)/10))+1:size(labels,1), :);
-%     labelsFoldTrain = [labelsFoldTrain1; labelsFoldTrain2];
-%     
-%     % train and evaluate
-%     
-%     
-% end
-
-%% (c2) compare results between ANN, Decision Tree, and SVM
-
-
+% %% (c2) compare results between ANN, Decision Tree, and SVM
+% 
+% % load predictions for Decision Tree and ANN
+% 
+% 
+% % between ANN and Decision Tree
+% [h,p,ci,stats] = ttest2(ANNPreds, DTPreds);
+% 
+% % between ANN and SVM
+% [h,p,ci,stats] = ttest2(ANNPreds, SVMPreds);
+% 
+% % between Decision Tree and SVM
+% [h,p,ci,stats] = ttest2(DTPreds, SVMPreds);
 
 end
 
@@ -257,9 +318,6 @@ function [features, labels] = preProcessData(features, labels)
 
 % remove irrelevant attributes
 features(:, {'Administrative' 'Informational' 'ProductRelated' 'OperatingSystems' 'Browser'}) = [];
-
-% % rename table column names for better display of decision tree
-% features.Properties.VariableNames = {'AdmDu', 'InfoDu', 'ProdDu', 'BounceR', 'ExitR', 'PageV', 'SpecD', 'Month', 'Region', 'TrafficT', 'VisitorT', 'Weekend'};
 
 % process features
 features.Weekend = findgroups(features.Weekend) - 1;
