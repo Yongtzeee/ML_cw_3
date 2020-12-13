@@ -20,8 +20,7 @@ labelsTest = labels(floor(size(features, 1)/5*4)+1:size(labels, 1), :);
 %% (a) Preliminary training to get it working
 % train the SVM
 modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','linear', 'BoxConstraint',1);
-[preds, ~, acc] = evaluateSVM(modelClassification, featuresTest, labelsTest);
-disp(size(preds))
+[~, ~, acc] = evaluateSVM(modelClassification, featuresTest, labelsTest);
 numSuppVec = size(modelClassification.SupportVectors, 1);
 disp("Result from Preliminary training:")
 disp("  Accuracy: " + acc * 100)
@@ -210,7 +209,7 @@ bestHyperparamCombi = bestHyperparamCombi';
 
 
 %% (c1) Perform 10-fold cross-validation for linear, gaussian rbf, and polynomial kernels
-maxAvgAcc = 0;
+SVMPreds = [];
 for f = 1:length(kernelFunctions)
     
     totalAcc = 0;
@@ -254,60 +253,94 @@ for f = 1:length(kernelFunctions)
     disp("  Max accuracy: " + maxAcc * 100)
     disp("  Average accuracy: " + avgAcc)
     
-    if avgAcc > maxAvgAcc
-        maxAvgAcc = avgAcc;
-        bestKernelFunc = kernelFunctions(f);
+    % train and evaluate best SVM model on whole dataset and retrieve its predictions
+    if kernelFunctions(f) == "linear"
+        modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','linear', 'BoxConstraint',bestHyperparamCombi(f,2));
+    elseif kernelFunctions(f) == "rbf"
+        modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','rbf', 'BoxConstraint',bestHyperparamCombi(f,2), 'KernelScale',bestHyperparamCombi(f,1));
+    elseif kernelFunctions(f) == "polynomial"
+        modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi(f,2), 'PolynomialOrder',bestHyperparamCombi(f,1));
     end
-end
-
-% train best SVM model on whole dataset and retrieve its predictions
-if bestKernelFunc == "linear"
-    modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','linear', 'BoxConstraint',bestHyperparamCombi(f,2));
-elseif bestKernelFunc == "rbf"
-    modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','rbf', 'BoxConstraint',bestHyperparamCombi(f,2), 'KernelScale',bestHyperparamCombi(f,1));
-elseif bestKernelFunc == "polynomial"
-    modelClassification = fitcsvm(featuresTrain, labelsTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi(f,2), 'PolynomialOrder',bestHyperparamCombi(f,1));
+    
+    % evaluate best model for each kernel and store their results and predictions
+    [preds, ~, acc] = evaluateSVM(modelClassification, featuresTest, labelsTest);
+    numSuppVec = size(modelClassification.SupportVectors, 1);
+    disp("----------------------------------------")
+    disp("Result from cross-validation training:")
+    disp("  Accuracy: " + acc * 100)
+    disp("  Number of Support Vectors: " + numSuppVec)
+    disp("  Support Vector Ratio: " + numSuppVec / height(features) * 100)
+    
+    SVMPreds = [SVMPreds preds];
+    
 end
 
 
 %% (c2) compare results between ANN, Decision Tree, and SVM
-[SVMPreds, ~, acc] = evaluateSVM(modelClassification, featuresTest, labelsTest);
-numSuppVec = size(modelClassification.SupportVectors, 1);
-disp("----------------------------------------")
-disp("Result from training:")
-disp("  Accuracy: " + acc * 100)
-disp("  Number of Support Vectors: " + numSuppVec)
-disp("  Support Vector Ratio: " + numSuppVec / height(features) * 100)
-
 % get predictions for Decision Tree and ANN
 ANNPreds = [1 0 0 0 1 1 1 0 0 0 1 0 1 0 0 0 1 0 0 1 0 1 0 1 0 1 0 1 1 1 1 0 1 1 0 1 0 1 1 1 1 1 0 0 0 1 1 1 1 0 1 0 1 1 0 1 0 1 0 1 1 1 1 1 0 1 1 0 0 1 0 0 0 1 0 0 1 0 1 0 1 0 0 1 1 1 0 1 1 0 0 0 0 1 1 1 1 1 1 1 0 1 0 0 1 1 1 0 1 0 1 1 0 0 1 1 1 0 1 1 1 1 0 1 1 0 0 1 0 0 1 1 0 0 0 1 1 1 1 1 1 0 0 1 0 0 0 0 1 1 0 1 0 0 0 1 1 1 1 1 0 0 1 0 1 0 0 0 0 1 1 1 1 1 0 1 1 1 1 1 1 1 0 0 0 0 1 1 1 0 1 0 1 0 1 1 1 0 1 0 1 1 1 0 1 0 0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 0 0 1 0 1 1 1 1 1 0 1 1 1 0 0 1 1 0 1 1 1 1 1 1 1 1 0 1 1 1 0 1 0 1 0 0 1 1 1 0 0 1 1 1 0 0 1 1 1 0 1 1 1 0 1 1 1 0 1 1 1 1 1 1 0 0 0 1 1 0 0 1 1 0 1 1 1 0 0 1 0 0 1 0 1 1 1 0 1 1 0 1 1 0 0 1 1 1 0 1 0 1 0 1 0 1 1 1 0 1 1 1 1 1 0 1 1 0 0 1 0 1 1 1 0 1 0 1 1 1 1 0 0 1 1 0 0 1 0 1 1 1 0 1 0 1 1 0 0 1 1 1 1 1 0 1 1 1 0 1 1 0 1 0 0 0 1 1 0 1 0 0 0 0 1 0 1 1 1 1 1 1 0 0 1 1 0 0 1 1 0 1 0 1 0 0 0 0 1 1 1 0 1 1 0 0 0 0 0 1 1 1 0 0 1 0 0 1 0 0 1 0 1 0 1 1 1 0 0 1 0 1 1 1 0 0 0 1 1 1 1 0 1 0 1 0 1 1 1 0 1 0 1 0 1 0 1 1 1 1 1 1 1 0 1 1 1 1 1 1 1 0 0 1 1 1 1 1 0 0 1 1 0 0 1 0 0 1 1 1 1 0 1 1 1 0 0 1 1 1 1 1 1 1 1 0 0 0 1 1 1 0 1 1 0 1 0 0 1 1 1 0 0 0 1 1 0 0 0 0 1 1 0 0 1 1 1 1 1 1 1 0 1 1 1 0 1 1 1 1 1 0 0 0 0 1 1 0 1 0 1 0 1 0 0 0 0 1 1 0 0 1 1 0 1 1 1 0 1 1 1 1 0 1 1 1 1 1 0 1 1 1 0 0 1 0 1 1 1 0 1 0 1 0 1 1 1 1 1 1 1 1 0 1 1 1 0 0 0 1 1 0 1 0 0 1 1 1 1 0 1 0 1 1 0 0 1 0 0 0 1 0 0 0 1 0 0 0 1 1 0 1 1 1 0 0 0 0 0 1 1 1 1 0 1 1 1 1 1 1 0 1 1 1 1 1 1 1 1 1 1 0 1 0 0 0 1 1 1 1 1 1 1 1 1 1 0 1 0 0 0 1 1 1 1 0 1 0 1 1 1 0 1 1 1 1 1 1 1 1 1 1 1 0 1 1 0 0 1 0 1 1 0 1 1 1 0 1 1 1 1 1]';
-DTPreds = [1 1 1 0 0 1 1 1 0 1 1 0 0 1 0 1 0 1 1 0 0 0 0 0 0 1 0 0 1 1 0 1 0 0 0 0 1 0 1 1 1 1 1 1 0 0 0 0 0 0 0 1 0 1 1 1 1 0 1 0 1 0 0 1 1 1 1 1 0 1 1 1 1 0 0 1 0 1 1 0 1 1 1 0 0 1 1 1 1 1 0 0 0 1 1 0 0 1 1 1 1 1 1 1 0 1 0 0 1 1 1 0 0 0 0 0 0 1 0 0 0 1 1 0 1 0 0 0 1 1 1 0 0 0 0 0 1 1 0 1 1 0 1 0 0 1 1 0 1 0 0 1 1 1 1 0 0 0 0 1 0 1 1 1 0 0 0 1 0 0 1 0 1 1 1 0 1 1 0 0 1 0 1 0 0 0 0 1 1 0 1 0 0 1 1 1 1 1 1 1 0 1 0 0 1 1 0 0 0 1 1 1 1 0 1 1 0 0 0 1 0 0 0 0 1 1 1 1 0 0 1 1 1 0 0 1 0 1 0 1 0 1 0 0 0 0 1 0 1 0 0 1 0 0 1 1 1 1 1 0 1 1 0 1 1 0 0 0 0 1 0 1 1 1 1 0 1 1 1 1 1 0 0 1 1 0 1 0 1 1 0 0 1 1 1 0 0 1 0 1 1 1 1 1 1 0 1 0 1 1 0 0 1 1 1 1 1 0 1 1 0 1 1 1 0 0 0 0 0 0 1 0 0 1 1 0 1 1 0 1 0 0 1 1 0 1 1 1 0 0 1 1 1 1 0 0 0 0 1 0 1 1 1 0 1 0 0 1 0 1 0 0 1 0 1 1 0 1 0 1 0 0 0 0 1 0 1 0 0 1 0 0 0 1 1 1 0 1 0 1 0 0 0 0 0 1 1 0 1 1 1 0 1 1 0 0 1 1 0 1 1 0 0 0 1 1 1 0 1 1 0 0 0 0 1 0 0 0 1 0 1 0 1 0 1 0 0 1 1 0 0 1 1 0 1 0 1 0 1 1 1 0 0 0 0 1 1 1 1 1 1 0 1 1 1 1 0 0 1 0 1 0 0 1 0 0 0 0 0 0 0 0 1 1 1 1 0 1 0 1 0 1 0 0 0 1 0 0 0 1 0 0 1 0 1 0 1 1 0 0 1 1 0 0 1 1 0 1 0 1 1 0 1 1 1 0 0 0 1 1 1 0 1 1 1 1 0 0 1 1 1 0 1 0 0 1 0 1 0 0 0 0 0 0 1 1 1 1 0 1 1 1 1 0 1 1 1 0 0 0 1 0 1 0 1 1 0 1 0 1 0 1 1 1 0 1 0 0 1 1 0 1 0 1 1 0 0 1 1 1 0 1 1 1 1 0 0 1 1 0 1 1 1 0 0 0 1 1 0 1 0 1 1 0 0 1 0 0 0 1 1 0 0 1 0 0 1 0 0 0 1 1 1 0 0 1 1 0 0 0 1 1 1 1 1 0 0 1 1 0 0 0 0 1 0 0 1 1 0 1 0 1 1 0 1 1 0 1 0 1 1 1 0 1 0 1 0 0 1 1 1 0 1 1 0 0 0 0 0 1 1 0 0 1 1 0 0 0 1 1 1 0 1 1 1 0 1 0 0 1 0 1 1 1 1 0 1 1 0 1 1 1 1 1 0 0 0 1 1 0 0 0 0 0 0 1 1 0 1 1 0 1 1 1]';
-SVMPreds = SVMPreds';
+DTPreds = [0 0 0 0 0 1 1 0 0 0 1 0 1 1 0 0 1 0 0 1 1 1 0 1 0 1 1 1 1 0 1 0 0 0 0 1 0 1 1 1 1 1 0 0 0 1 1 1 1 0 1 0 1 1 0 1 0 0 0 1 1 1 1 1 0 1 1 0 0 1 1 0 0 1 1 0 0 0 1 0 1 0 0 1 1 1 1 1 1 0 0 0 0 0 0 1 1 1 1 1 0 1 0 0 1 0 1 1 1 1 1 1 0 0 1 1 0 1 1 1 1 1 0 0 1 0 0 1 1 0 1 1 0 0 1 1 0 1 1 1 1 0 0 1 0 0 0 0 1 1 0 1 0 0 0 0 1 1 0 1 0 0 1 1 1 0 0 0 0 1 1 0 1 1 0 1 1 1 1 1 0 1 0 0 0 0 1 1 1 0 1 0 1 0 1 1 1 0 1 1 0 1 1 0 1 0 0 1 0 1 1 1 1 1 1 1 1 1 0 1 0 1 1 0 0 0 1 1 1 1 1 0 1 1 1 0 0 1 1 0 1 1 0 0 1 0 1 1 0 1 1 1 1 1 0 1 0 0 1 1 1 1 0 1 1 1 1 0 1 1 0 0 1 1 0 0 1 1 1 0 1 1 1 1 1 0 1 0 0 1 1 0 0 0 1 0 1 1 1 0 0 1 0 0 1 1 1 1 1 0 1 1 0 1 1 0 0 1 1 1 0 1 0 1 0 1 0 1 1 1 0 1 0 1 1 1 0 1 1 1 0 1 0 1 1 1 0 1 1 1 0 1 1 0 0 1 1 0 1 1 0 1 1 0 0 1 0 1 1 0 0 1 1 1 1 1 0 1 1 1 0 1 1 0 1 0 0 0 1 0 0 1 0 0 0 0 0 0 1 1 1 1 0 0 0 0 1 1 0 0 1 1 0 0 0 0 0 0 0 0 1 0 0 0 1 1 0 0 0 0 0 1 1 1 0 0 1 1 0 0 0 1 1 0 1 0 1 1 1 0 1 1 0 1 0 0 0 1 0 1 1 1 1 0 1 0 1 0 1 1 1 0 0 0 1 0 1 0 1 1 1 1 1 1 1 0 1 1 1 0 1 1 1 0 0 0 1 1 1 1 0 0 0 1 0 1 0 0 0 1 0 1 1 0 1 1 1 0 0 1 1 1 1 1 1 1 0 0 0 0 0 1 1 0 1 1 0 1 0 1 1 1 1 0 0 0 1 1 0 0 0 0 1 1 0 0 1 0 0 1 1 1 0 0 1 1 1 0 1 1 1 0 1 1 0 0 1 1 1 0 0 0 1 1 1 0 0 0 1 1 1 0 0 1 1 0 1 0 1 0 1 1 1 1 0 1 1 1 1 1 0 1 1 1 0 1 1 0 1 1 1 0 1 0 1 0 1 1 1 1 1 1 1 0 0 1 1 1 0 0 0 1 0 0 1 0 0 1 1 1 1 0 1 0 1 1 1 0 1 0 0 0 1 0 0 0 1 1 0 0 1 1 0 1 1 1 1 0 0 0 0 1 1 1 1 1 1 1 1 1 1 1 0 1 0 1 1 1 0 1 1 1 1 0 1 0 0 0 0 0 1 1 1 1 1 1 1 1 1 1 0 0 1 1 1 1 1 0 1 0 1 1 0 0 1 1 1 1 1 1 1 1 1 1 0 0 1 1 0 0 1 0 1 1 0 0 1 1 0 1 1 1 1 1]';
+SVMLinearPreds = SVMPreds(:,1);
+SVMRBFPreds = SVMPreds(:,2);
+SVMPolynomialPreds = SVMPreds(:,3);
 
-ttest2Results = zeros(3,3);
+modelPreds = [ANNPreds DTPreds SVMLinearPreds SVMRBFPreds SVMPolynomialPreds];
+models = ["ANN" "DecisionTree" "SVMLinear" "SVMRBF" "EVMPolynomial"];
+numModels = length(models);
+count = 1;
+pairing = [];
+ttest2Results = zeros(3,10);    % 4+3+2+1 pairings
 
-% between ANN and Decision Tree
-[h,p,~,stats] = ttest2(ANNPreds, DTPreds);
-ttest2Results(1) = h;
-ttest2Results(2) = p;
-ttest2Results(3) = stats.tstat;
+% calculate accuracy of all the predictions
+disp("----------------------------------------")
+disp("Accuracy of each model:")
+accuracyOfModels = zeros(1,length(models));
+for i = 1:length(models)
+    
+    pred = modelPreds(:, i);
+    acc = calculateAccuracy(pred, table2array(labelsTest));
+    accuracyOfModels(i) = acc;
+    
+    disp(models(i) + ": " + acc)
+end
 
-% between ANN and SVM
-[h,p,~,stats] = ttest2(ANNPreds, SVMPreds);
-ttest2Results(4) = h;
-ttest2Results(5) = p;
-ttest2Results(6) = stats.tstat;
-
-% between Decision Tree and SVM
-[h,p,~,stats] = ttest2(DTPreds, SVMPreds);
-ttest2Results(7) = h;
-ttest2Results(8) = p;
-ttest2Results(9) = stats.tstat;
-
+% run ttest on all combinations
 disp("----------------------------------------")
 disp("TTEST2 Results:")
-disp(ttest2Results')
+for i = 1:numModels-1
+    for j = i+1:numModels
+        
+        pairing = [pairing; models(i)+" + "+models(j)];
+        
+        [h,p,~,stats] = ttest2(modelPreds(:,i), modelPreds(:,j));
+        ttest2Results(count) = h;
+        ttest2Results(count+1) = p;
+        ttest2Results(count+2) = stats.tstat;
+        
+        count = count + 3;
+        
+        disp(models(i) + " + " + models(j))
+        disp("  h: " + h + ", p: " + p + ", t-stat: " + stats.tstat)
+    end
+end
 
+ttest2Results = ttest2Results';
+
+end
+
+
+%% calculate accuracy
+function accuracy = calculateAccuracy(predicted, actual)
+
+totalCorrect = 0;
+for p = 1:length(predicted)
+    if predicted(p) == actual(p)
+        totalCorrect = totalCorrect + 1;
+    end
+end
+
+accuracy = totalCorrect / length(predicted);
+    
 end
 
 
@@ -318,14 +351,7 @@ function [preds, scores, acc] = evaluateSVM(model, features, labels)
 
 labs = table2array(labels);
 
-totalCorrect = 0;
-for i = 1:length(preds)
-    if preds(i) == labs(i)
-        totalCorrect = totalCorrect + 1;
-    end
-end
-
-acc = totalCorrect / length(preds);
+acc = calculateAccuracy(preds, labs);
 
 end
 
