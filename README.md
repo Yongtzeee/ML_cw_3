@@ -6,3 +6,7 @@ Machine Learning coursework 3: Support Vector Machines
 [Question 2 second part answer reference](https://stackoverflow.com/a/4630731)
 - generally, C value needs to be large for hard-margin SVM
 
+
+
+Additional readings:
+[Understanding t-tests](https://blog.minitab.com/blog/adventures-in-statistics-2/understanding-t-tests-t-values-and-t-distributions)
