@@ -13,20 +13,6 @@ responseTrain = data_combined(1:floor(size(data_combined,1))/5*4,y);
 predictorTest = data_combined(floor(size(data_combined,1)/5*4)+1:x ,1:y-1);
 responseTest = data_combined(floor(size(data_combined,1)/5*4)+1:x ,y);
 
-%% Part (a) Linear kernel training (commented out to save time for now)
-% Mdl = fitrsvm(predictorTrain, responseTrain,'KernelFunction', 'linear' ,'Epsilon', 0.5, 'Standardize', true);
-% 
-% % Test on test set 
-% acc = predict(Mdl, predictorTest);
-% 
-% % Calculate MSE of the predicted set against GT
-% mse = immse(table2array(responseTest), acc);
-% rmse = sqrt(mse);
-% 
-% disp("Convergence: " + Mdl.ConvergenceInfo.Converged)
-% disp(" # of support vectors: " + size(Mdl.SupportVectors,1))
-% disp("RMSE: " + rmse)
-
 %% Part (b) Train each model -> Linear, RBF, Polynomial
 
 % Reduce number of datapoints for CV
@@ -39,17 +25,14 @@ cvFolds = 5;
 boxConstraints = [0.1, 1, 5, 10, 20];
 epsilonScale = [0.3, 0.5, 0.7, 0.9];
 
+%% RBF Kernel
+
 % Store results
-% resultsNestedCV.linear = zeros(3, 1, length(boxConstraints));
-
-
-%% Linear Kernel
-
-% RBF Kernel
-kernelScale = [0.1, 1, 5, 10, 20];
-
 resultsNestedCV.rbf = zeros(3, 1, length(boxConstraints));    
+
+kernelScale = [0.1, 1, 5, 10, 20];
 count = 1;
+
 for c = boxConstraints
     bestBestBestRMSE = 1;
     bestBestBestModel = 0;
@@ -146,4 +129,3 @@ for c = boxConstraints
     
     count = count+3;  
 end
-%% Find out best hyperparameter combination for all models -> linear, rbf, polynomial

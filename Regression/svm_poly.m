@@ -13,20 +13,6 @@ responseTrain = data_combined(1:floor(size(data_combined,1))/5*4,y);
 predictorTest = data_combined(floor(size(data_combined,1)/5*4)+1:x ,1:y-1);
 responseTest = data_combined(floor(size(data_combined,1)/5*4)+1:x ,y);
 
-%% Part (a) Linear kernel training (commented out to save time for now)
-% Mdl = fitrsvm(predictorTrain, responseTrain,'KernelFunction', 'linear' ,'Epsilon', 0.5, 'Standardize', true);
-% 
-% % Test on test set 
-% acc = predict(Mdl, predictorTest);
-% 
-% % Calculate MSE of the predicted set against GT
-% mse = immse(table2array(responseTest), acc);
-% rmse = sqrt(mse);
-% 
-% disp("Convergence: " + Mdl.ConvergenceInfo.Converged)
-% disp(" # of support vectors: " + size(Mdl.SupportVectors,1))
-% disp("RMSE: " + rmse)
-
 %% Part (b) Train each model -> Linear, RBF, Polynomial
 
 % Reduce number of datapoints for CV
@@ -39,17 +25,14 @@ cvFolds = 5;
 boxConstraints = [0.1, 1, 5, 10, 20];
 epsilonScale = [0.3, 0.5, 0.7, 0.9];
 
+%% Polynomial Kernel
+
 % Store results
-% resultsNestedCV.linear = zeros(3, 1, length(boxConstraints));
+resultsNestedCV.polynomial = zeros(3, 1, length(boxConstraints));
 
-
-%% Linear Kernel
-
-% RBF Kernel
-kernelScale = [0.1, 1, 5, 10, 20];
-
-resultsNestedCV.rbf = zeros(3, 1, length(boxConstraints));    
+polynomialOrder = 2:2;
 count = 1;
+
 for c = boxConstraints
     bestBestBestRMSE = 1;
     bestBestBestModel = 0;
@@ -59,11 +42,12 @@ for c = boxConstraints
         fprintf("\n")
         disp("Current ep: "+ep)
         
-        bestKernelScale = 0;
+        bestPolynomialOrder = 0;
         bestBestRMSE = 1;
         bestBestModel = 0;
         
-        for k = kernelScale
+        for k = polynomialOrder
+            disp("Polynomial Order: "+k)
             bestRMSE = 1;
 %             bestKernelModel = 0;
             
@@ -83,6 +67,7 @@ for c = boxConstraints
                 bestInnerFoldModel = 0;
                 
                 for innerFold = 1:cvFolds
+                    disp("Inner fold: "+innerFold)
                     % split dataset into training and testing datasets in each fold
                     featuresFoldTestInner = featuresFoldTrainOuter((innerFold-1)*(floor(size(featuresFoldTrainOuter,1)/10))+1:innerFold*(floor(size(featuresFoldTrainOuter,1)/10)), :);
                     featuresFoldTrain1 = featuresFoldTrainOuter(1:(innerFold-1)*(floor(size(featuresFoldTrainOuter,1)/10)), :);
@@ -95,12 +80,15 @@ for c = boxConstraints
                     labelsFoldTrainInner = [labelsFoldTrain1; labelsFoldTrain2];
                 
                     % Train model
-                    modelRegression = fitrsvm(featuresFoldTrainInner, labelsFoldTrainInner, 'KernelFunction', 'rbf', 'KernelScale', k, 'BoxConstraint',c, 'Epsilon',ep, 'Standardize', 1);
+                    modelRegression = fitrsvm(featuresFoldTrainInner, labelsFoldTrainInner, 'KernelFunction', 'polynomial', 'PolynomialOrder', k, 'BoxConstraint',c, 'Epsilon',ep ,'Standardize', 1);
                     
                     % Evaluate the model
                     predicted_labels = predict(modelRegression, featuresFoldTestInner);
                     mse = immse(table2array(labelsFoldTestInner), predicted_labels);
                     rmse = sqrt(mse);
+                    
+                    disp("RMSE calculated: "+rmse)
+                    disp("Lowest Inner fold RMSE: "+lowestInnerFoldRMSE)
                     
                     if rmse < lowestInnerFoldRMSE
                         lowestInnerFoldRMSE = rmse;
@@ -140,10 +128,9 @@ for c = boxConstraints
     suppVecNum = size(bestBestBestModel.SupportVectors,1);
     suppVecRat = suppVecNum/height(featuresFoldTrainOuter) * 100;
     
-    resultsNestedCV.rbf(count) = suppVecNum;
-    resultsNestedCV.rbf(count+1) = suppVecRat;
-    resultsNestedCV.rbf(count+2) = bestBestBestRMSE;
+    resultsNestedCV.polynomial(count) = suppVecNum;
+    resultsNestedCV.polynomial(count+1) = suppVecRat;
+    resultsNestedCV.polynomial(count+2) = bestBestBestRMSE;
     
     count = count+3;  
 end
-%% Find out best hyperparameter combination for all models -> linear, rbf, polynomial
