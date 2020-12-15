@@ -107,7 +107,6 @@ for f = kernelFunctions
                     [~, ~, acc] = evaluateSVM(modelClassification, featuresFoldTestInner, labelsFoldTestInner);
                     
                     % - a better SVM model is a model that uses less number of support vectors but achieves better accuracy
-
                     % combine accuracy and SV ratio to calculate "generalization point" for each
                     % best performing hyperparameter combination candidate
                     point = acc * 100 + (100 - size(modelClassification.SupportVectors, 1)/height(featuresFoldTrainInner) * 100);
@@ -285,7 +284,7 @@ SVMRBFPreds = SVMPreds(:,2);
 SVMPolynomialPreds = SVMPreds(:,3);
 
 modelPreds = [ANNPreds DTPreds SVMLinearPreds SVMRBFPreds SVMPolynomialPreds];
-models = ["ANN" "DecisionTree" "SVMLinear" "SVMRBF" "EVMPolynomial"];
+models = ["ANN" "DecisionTree" "SVMLinear" "SVMRBF" "SVMPolynomial"];
 numModels = length(models);
 count = 1;
 pairing = [];
