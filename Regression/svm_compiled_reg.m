@@ -4,14 +4,18 @@ data_white = readtable("winequality-white.csv", 'PreserveVariableNames', 1);
 data_combined = [data_red;data_white];
 data_combined = normalize(data_combined, 'range');
 
-[x,y] = size(data_combined);
-
 %% Specify predictor and response variables (Train test features x labels)
-predictorTrain = data_combined(1:floor(size(data_combined,1))/5*4,1:y-1);
-responseTrain = data_combined(1:floor(size(data_combined,1))/5*4,y);
+predictors = data_combined(:, 1:size(data_combined, 2)-1);
+response = data_combined(:, size(data_combined, 2));
 
-predictorTest = data_combined(floor(size(data_combined,1)/5*4)+1:x ,1:y-1);
-responseTest = data_combined(floor(size(data_combined,1)/5*4)+1:x ,y);
+[x,y] = size(predictors);
+
+predictorTrain = predictors(1:floor(size(data_combined,1))/5*4,:);
+responseTrain = response(1:floor(size(data_combined,1))/5*4,:);
+
+predictorTest = predictors(floor(size(predictors, 1)/5*4)+1:size(predictors, 1), :);
+responseTest = response(floor(size(predictors, 1)/5*4)+1:size(response, 1), :);
+
 %% (b) Performing inner cross-validation
 
 % hyperparameters
@@ -154,9 +158,7 @@ for f = kernelFunctions
         end
     end
 end
-
-
-%% Pick hyperparams
+%% Part (b) Pick hyperparams
 bestHyperparamCombi = zeros(3,3);
 countHyper = 1;
 
@@ -210,6 +212,85 @@ for f = kernelFunctions
     disp("  Best RMSE: " +unique(min(resultMat(3, bestValArg, bestEpIndex, bestBoxCon))))
 end
 
+bestHyperparamCombi = bestHyperparamCombi'
+
+%% Part(c) Perform 10-fold cross-validation for linear, gaussian rbf, and polynomial kernels
+SVMPreds = [];
+for f = 1:length(kernelFunctions)
+    disp("Kernel: "+ kernelFunctions(f))
+%     totalAcc = 0;
+    totalRMSE = 0;
+%     maxAcc = 0;
+    minRMSE = 1;
+    folds = 10;
+    
+    for fold = 1:folds
+        disp("On fold: "+fold)
+        % split dataset into training and testing datasets in each fold
+        featuresFoldTest = predictorTrain((fold-1)*(floor(size(predictorTrain,1)/10))+1:fold*(floor(size(predictorTrain,1)/10)), :);
+        featuresFoldTrain1 = predictorTrain(1:(fold-1)*(floor(size(predictorTrain,1)/10)), :);
+        featuresFoldTrain2 = predictorTrain(fold*(floor(size(predictorTrain,1)/10))+1:size(predictorTrain,1), :);
+        featuresFoldTrain = [featuresFoldTrain1; featuresFoldTrain2];
+        
+        labelsFoldTest = responseTrain((fold-1)*(floor(size(predictorTrain,1)/10))+1:fold*(floor(size(predictorTrain,1)/10)), :);
+        labelsFoldTrain1 = responseTrain(1:(fold-1)*(floor(size(predictorTrain,1)/10)), :);
+        labelsFoldTrain2 = responseTrain(fold*(floor(size(predictorTrain,1)/10))+1:size(responseTrain,1), :);
+        labelsFoldTrain = [labelsFoldTrain1; labelsFoldTrain2];
+
+        % train SVM
+        if kernelFunctions(f) == "linear"
+            modelRegression = fitrsvm(featuresFoldTrain, labelsFoldTrain, 'KernelFunction','linear', 'BoxConstraint',bestHyperparamCombi(f,3), 'Epsilon', bestHyperparamCombi(f,2), 'Standardize', true);
+ 
+        elseif kernelFunctions(f) == "rbf"
+            modelRegression = fitrsvm(featuresFoldTrain, labelsFoldTrain, 'KernelFunction','rbf', 'BoxConstraint',bestHyperparamCombi(f,3), 'KernelScale',bestHyperparamCombi(f,1), 'Epsilon', bestHyperparamCombi(f,2), 'Standardize', true);
+            
+        elseif kernelFunctions(f) == "polynomial"
+            modelRegression = fitrsvm(featuresFoldTrain, labelsFoldTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi(f,3), 'PolynomialOrder',bestHyperparamCombi(f,1), 'Epsilon', bestHyperparamCombi(f,2), 'Standardize', true);
+        end
+
+        % evaluate SVM
+        [~, rmse] = evaluateSVM(modelRegression, featuresFoldTest, labelsFoldTest);
+
+        % average and max accuracy
+        if rmse < minRMSE
+            minRMSE = rmse;
+        end
+        totalRMSE = totalRMSE + rmse;
+        
+    end
+    
+%     avgAcc = totalRMSE / folds * 100;
+    avgRMSE = totalRMSE/folds;
+    disp("----------------------------------------")
+    disp("Result for " + kernelFunctions(f) + " kernel function in 10-fold cross-validation:")
+    disp("  Min RMSE: " + minRMSE * 100)
+    disp("  Average RMSE: " + avgRMSE)
+    
+    % train and evaluate best SVM model on whole dataset and retrieve its predictions
+    if kernelFunctions(f) == "linear"
+        modelRegression = fitrsvm(predictorTrain, responseTrain, 'KernelFunction','linear', 'BoxConstraint',bestHyperparamCombi(f,3), 'Epsilon', bestHyperparamCombi(f,2), 'Standardize', true);
+        
+    elseif kernelFunctions(f) == "rbf"
+        modelRegression = fitrsvm(predictorTrain, responseTrain, 'KernelFunction','rbf', 'BoxConstraint',bestHyperparamCombi(f,3), 'KernelScale',bestHyperparamCombi(f,1), 'Epsilon', bestHyperparamCombi(f,2), 'Standardize', true);
+    
+    elseif kernelFunctions(f) == "polynomial"
+        modelRegression = fitrsvm(predictorTrain, responseTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi(f,3), 'PolynomialOrder',bestHyperparamCombi(f,1), 'Epsilon', bestHyperparamCombi(f,2), 'Standardize', true);
+    end
+    
+    % evaluate best model for each kernel and store their results and predictions
+    [preds,rmse] = evaluateSVM(modelRegression, predictorTest, responseTest);
+    numSuppVec = size(modelRegression.SupportVectors, 1);
+    disp("----------------------------------------")
+    disp("Result from cross-validation training:")
+    disp("  RMSE: " + rmse)
+    disp("  Number of Support Vectors: " + numSuppVec)
+    disp("  Support Vector Ratio: " + numSuppVec / height(predictors) * 100)
+    
+    SVMPreds = [SVMPreds preds];
+    
+end
+
+%% Part (c) Ttest against existing work
 %% evaluate SVM function
 function [preds, acc] = evaluateSVM(model, features, labels)
 
