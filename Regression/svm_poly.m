@@ -195,8 +195,23 @@ for fold = 1:folds
     totalRMSE = totalRMSE + rmse;
 end
 
+% results for 10 fold CV
 avgRMSE = totalRMSE / folds;
 disp("----------------------------------------")
 disp("Result for polynomial kernel function in 10-fold cross-validation:")
 disp("  Max RMSE: " + bestRMSE)
 disp("  Average RMSE: " + avgRMSE)
+
+% train and evaluate best SVM model on whole dataset and retrieve its predictions
+modelRegression = fitrsvm(predictorTrain, responseTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi_poly(polynomial,2), 'PolynomialOrder',bestHyperparamCombi_poly(polynomial,1));
+
+% evaluate best model for polynomial kernel and store their results and predictions
+predicted_labels = predict(modelRegression, predictorTest);
+mse = immse(table2array(responseTest), predicted_labels);
+% numSuppVec = size(modelClassification.SupportVectors, 1);
+suppVecNum = size(modelRegression.SupportVectors,1);
+disp("----------------------------------------")
+disp("Result from cross-validation training:")
+disp("  RMSE: " + bestRMSE)
+disp("  Number of Support Vectors: " + suppVecNum)
+% disp("  Support Vector Ratio: " + suppVecNum/height(features) * 100)
