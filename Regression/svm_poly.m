@@ -134,3 +134,69 @@ for c = boxConstraints
     
     count = count+3;  
 end
+
+bestHyperparamCombi_poly = zeros(2,1); % confirm size
+countHyper = 1;
+bc = boxConstraints;
+
+% get highest point for each model
+[maxPointsDim2, idx2] = max(resultsNestedCV.polynomial(3,:,:), [], 2); % error exceeding array
+[~, idx3] = max(maxPointsDim2, [], 3);
+
+bestHyperparamCombi_poly(countHyper) = polynomialOrder(idx2(idx3));
+bestHyperparamCombi_poly(countHyper+1) = bc(idx3);
+
+countHyper = countHyper + 2;
+
+disp("----------------------------------------")
+disp("Best hyperparameter combination for polynomial kernel function:")
+disp("  Box Constraint: " + bc(idx3))
+disp("  Kernel Function argument value: " + polynomialOrder(idx2(idx3)))
+disp("====================")
+disp("Best results from nested cross-validation:")
+disp("  Number of support vectors: " + resultsNestedCV.polynomial(1,idx2(idx3),idx3))
+disp("  Support vector ratio: " + resultsNestedCV.polynomial(2,idx2(idx3),idx3))
+disp("  RMSE: " + resultsNestedCV.polynomial(3,idx2(idx3),idx3))
+
+bestHyperparamCombi_poly = bestHyperparamCombi_poly';
+
+%% perform 10-fold cross validation for polynomial kernel
+SVMPreds = [];
+
+folds = 10;
+bestRMSE = 0;
+totalRMSE = 0; % for average RMSE of all 10 folds
+
+for fold = 1:folds
+    
+    % split dataset into training and testing datasets in each fold
+    featuresFoldTest = predictorCV((fold-1)*(floor(size(predictorCV,1)/10))+1:fold*(floor(size(predictorCV,1)/10)), :);
+    featuresFoldTrain1 = predictorCV(1:(fold-1)*(floor(size(predictorCV,1)/10)), :);
+    featuresFoldTrain2 = predictorCV(fold*(floor(size(predictorCV,1)/10))+1:size(predictorCV,1), :);
+    featuresFoldTrain = [featuresFoldTrain1; featuresFoldTrain2];
+    
+    labelsFoldTest = responseCV((fold-1)*(floor(size(predictorCV,1)/10))+1:fold*(floor(size(predictorCV,1)/10)), :);
+    labelsFoldTrain1 = responseCV(1:(fold-1)*(floor(size(predictorCV,1)/10)), :);
+    labelsFoldTrain2 = responseCV(fold*(floor(size(predictorCV,1)/10))+1:size(responseCV,1), :);
+    labelsFoldTrain = [labelsFoldTrain1; labelsFoldTrain2];
+    
+    % train SVM
+    modelRegression = fitrsvm(featuresFoldTrain, labelsFoldTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi_poly(polynomial,2), 'PolynomialOrder',bestHyperparamCombi_poly(polynomial,1));
+    
+    % evaluate SVM
+    predicted_labels = predict(modelRegression, featuresFoldTest);
+    mse = immse(table2array(labelsFoldTest), predicted_labels);
+    rmse = sqrt(mse);
+    
+    % average and best RMSE
+    if rmse < bestRMSE
+        bestRMSE = rmse;
+    end
+    totalRMSE = totalRMSE + rmse;
+end
+
+avgRMSE = totalRMSE / folds;
+disp("----------------------------------------")
+disp("Result for polynomial kernel function in 10-fold cross-validation:")
+disp("  Max RMSE: " + bestRMSE)
+disp("  Average RMSE: " + avgRMSE)
