@@ -140,7 +140,7 @@ countHyper = 1;
 bc = boxConstraints;
 
 % get highest point for each model
-[maxPointsDim2, idx2] = max(resultsNestedCV.polynomial(3,:,:), [], 2); % error exceeding array
+[maxPointsDim2, idx2] = max(resultsNestedCV.polynomial(3,:,:), [], 1);
 [~, idx3] = max(maxPointsDim2, [], 3);
 
 bestHyperparamCombi_poly(countHyper) = polynomialOrder(idx2(idx3));
@@ -181,7 +181,7 @@ for fold = 1:folds
     labelsFoldTrain = [labelsFoldTrain1; labelsFoldTrain2];
     
     % train SVM
-    modelRegression = fitrsvm(featuresFoldTrain, labelsFoldTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi_poly(polynomial,2), 'PolynomialOrder',bestHyperparamCombi_poly(polynomial,1));
+    modelRegression = fitrsvm(featuresFoldTrain, labelsFoldTrain, 'KernelFunction','polynomial', 'BoxConstraint',bestHyperparamCombi_poly('polynomial',2), 'PolynomialOrder',bestHyperparamCombi_poly('polynomial',1));
     
     % evaluate SVM
     predicted_labels = predict(modelRegression, featuresFoldTest);

@@ -135,7 +135,7 @@ countHyper = 1;
 bc = boxConstraints;
 
 % get highest point for each model
-[maxPointsDim2, idx2] = max(resultsNestedCV.rbf(3,:,:), [], 2); % error exceeding array
+[maxPointsDim2, idx2] = max(resultsNestedCV.rbf(3,:,:), [], 1);
 [~, idx3] = max(maxPointsDim2, [], 3);
 
 bestHyperparamCombi_rbf(countHyper) = kernelScale(idx2(idx3));
