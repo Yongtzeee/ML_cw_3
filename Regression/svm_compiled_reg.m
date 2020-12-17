@@ -314,7 +314,7 @@ accuracyOfModels = zeros(1,length(models));
 
 for i = 1:length(models)
     pred = modelPreds(:, i);
-    acc = calculateAccuracy(pred, table2array(labelsTest));
+    acc = calculateAccuracy(pred, table2array(responseTest));
     accuracyOfModels(i) = acc;
     
     disp(models(i) + ": " + acc)
